@@ -1,12 +1,21 @@
-CREATE DATABASE login_demo CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+<?php
+include("db_connect.php");
  
-USE login_demo;
+if (isset($_POST['register'])) {
+    $username = $_POST['username'];
+    $password = md5($_POST['password']);
  
-CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL
-);
- 
-INSERT INTO users (username, password)
-VALUES ('admin', MD5('123456'));
+    $check = mysqli_query($link, "SELECT * FROM users WHERE username='$username'");
+    if (mysqli_num_rows($check) > 0) {
+        echo "Existed";
+    } else {
+        
+        $query = "INSERT INTO users (username, password) VALUES ('$username', '$password')";
+        if (mysqli_query($link, $query)) {
+            echo "Successful";
+        } else {
+            echo "Error " . mysqli_error($link);
+        }
+    }
+}
+?>
