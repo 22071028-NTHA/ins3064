@@ -1,30 +1,63 @@
 <?php
 session_start();
+require_once 'connection.php';
 
-/* Kết nối tới database */
-$con = mysqli_connect('localhost', 'root', '', 'login_1');
-if (!$con) {
-    die('Connection failed: ' . mysqli_connect_error());
+// Kiểm tra dữ liệu đầu vào
+if (!isset($_POST['username'], $_POST['email'], $_POST['password']) || 
+    empty(trim($_POST['username'])) || 
+    empty(trim($_POST['email'])) || 
+    empty($_POST['password'])) {
+    header('Location: register.php?error=Vui lòng điền đầy đủ thông tin!');
+    exit();
 }
 
-/* Lấy dữ liệu từ form đăng ký */
-$name = $_POST['user'];
-$pass = $_POST['password'];
+$username = trim($_POST['username']);
+$email    = trim(strtolower($_POST['email']));
+$password = password_hash($_POST['password'], PASSWORD_BCRYPT);
 
-/* Kiểm tra xem username đã tồn tại chưa */
-$check = "SELECT * FROM table3 WHERE username='$name'";
-$result = mysqli_query($con, $check);
-$num = mysqli_num_rows($result);
+// BƯỚC 1: KIỂM TRA EMAIL CÓ PHẢI GMAIL KHÔNG
+if (!preg_match("/^[a-zA-Z0-9._%+-]+@gmail\.com$/", $email)) {
+    header('Location: register.php?error=Email phải có đuôi @gmail.com!');
+    exit();
+}
 
-if ($num == 1) {
-    // Nếu username đã tồn tại
-    echo "<script>alert('Username already exists! Please choose another.'); window.location='login.php';</script>";
+// BƯỚC 2: XÁC ĐỊNH QUYỀN (admin đầu tiên hay user thường)
+$role = 'user';
+if (isset($_POST['make_admin']) && $_POST['make_admin'] == 1) {
+    $check = $conn->query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    if ($check && $check->num_rows === 0) {
+        $role = 'admin';
+    }
+}
+
+// BƯỚC 3: KIỂM TRA TRÙNG USERNAME HOẶC EMAIL
+$stmt = $conn->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
+$stmt->bind_param("ss", $username, $email);
+$stmt->execute();
+$stmt->store_result();
+
+if ($stmt->num_rows > 0) {
+    $stmt->close();
+    header('Location: register.php?error=Tên đăng nhập hoặc email đã tồn tại!');
+    exit();
+}
+$stmt->close();
+
+// BƯỚC 4: ĐĂNG KÝ THÀNH CÔNG – LƯU VÀO CSDL
+$stmt = $conn->prepare("INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)");
+$stmt->bind_param("ssss", $username, $email, $password, $role);
+
+if ($stmt->execute()) {
+    $stmt->close();
+    $msg = $role === 'admin' 
+        ? 'Tài khoản Admin đã được tạo thành công!' 
+        : 'Đăng ký thành công! Hãy đăng nhập ngay.';
+    
+    header("Location: login.php?msg=" . urlencode($msg));
+    exit();
 } else {
-    // Nếu chưa tồn tại thì lưu user mới
-    $reg = "INSERT INTO table3 (username, password) VALUES ('$name', '$pass')";
-    mysqli_query($con, $reg);
-    echo "<script>alert('Registration successful! You can now log in.'); window.location='login.php';</script>";
+    $stmt->close();
+    header('Location: register.php?error=Đã có lỗi xảy ra, vui lòng thử lại!');
+    exit();
 }
-
-mysqli_close($con);
 ?>
